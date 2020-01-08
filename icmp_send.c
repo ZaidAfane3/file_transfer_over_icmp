@@ -1,243 +1,216 @@
-/**
+/*
     Transfer file by ICMP
     By: liu feiran
+    Edited by Zaid Afaneh for University Project  
 */
   
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <sys/time.h>
-#include <netinet/ip.h>
-#include <netinet/ip_icmp.h>
-#include <unistd.h>
-#include <getopt.h>
+
+#include "unp.h"
 
 typedef unsigned char u8;
 typedef unsigned short int u16;
- 
-unsigned long daddr;
-unsigned long saddr;
-int payload_size = 0, sent, sent_size, sockfd;
-char *packet;
 
-int max_buffer_size = 1400; 
- 
-void usage(char *progname)
-{
-        printf("Usage: %s <dest-ip> [options]\n"
-                        "\tOptions:\n"
-                        "\t-s, --source-ip\t\tsource ip\n"
-                        "\t-f, --file-name\t\tfile name\n"
-                        "\t-m, --max-buffer-size\t\tmax buffer size\n"
-                        "\t-h, --help\n"
-                        "\n"
-                        , progname);
+unsigned long daddr; // destination address in network format 
+unsigned long saddr; // source address in network format 
+int Data_size = 0, sent, sent_size, sockfd; 
+char *packet; // pointer to the socket address in the memory 
+
+
+// The size of Data being read from file to be send in bytes 
+int max_buffer_size = 1024;
+
+// Function to print the arguments needed for this code 
+void usage(){
+    printf("Usage: ICMP_File_VPN <DEST-IP> <SOURCE-IP> <FILE> <MAX-BUFFER-SIZE> <HELP>\n");
 }
 
-/*
-    Function calculate checksum
-*/
-unsigned short in_cksum(unsigned short *ptr, int nbytes)
+
+// function calculates the checksum 
+unsigned short checksum(unsigned short *ptr, int nbytes)
 {
     register long sum;
     u_short oddbyte;
     register u_short answer;
- 
+
     sum = 0;
     while (nbytes > 1) {
         sum += *ptr++;
         nbytes -= 2;
     }
- 
+
     if (nbytes == 1) {
         oddbyte = 0;
         *((u_char *) & oddbyte) = *(u_char *) ptr;
         sum += oddbyte;
     }
- 
+
     sum = (sum >> 16) + (sum & 0xffff);
     sum += (sum >> 16);
     answer = ~sum;
- 
+
     return (answer);
 }
 
-int create_send_socket() 
+
+// Functions creates the socket 
+int create_send_socket()
 {
-    //Raw socket - if you use IPPROTO_ICMP, then kernel will fill in the correct ICMP header checksum, if IPPROTO_RAW, then it wont
-    sockfd = socket (AF_INET, SOCK_RAW, IPPROTO_RAW);
-    
-    if (sockfd < 0)
+    // create a raw socket and in case it fails it end the code.  
+    if ( (sockfd = socket (AF_INET, SOCK_RAW, IPPROTO_RAW)) < 0)
     {
         perror("could not create socket");
         return (1);
     }
-     
+
+    // in case of success above we set the socket options to tell the kernal we will provide the Network Header (IPv4)
     int on = 1;
-     
-    // We shall provide IP headers
-    if (setsockopt (sockfd, IPPROTO_IP, IP_HDRINCL, (const char*)&on, sizeof (on)) == -1)
+    if (setsockopt (sockfd, IPPROTO_IP, IP_HDRINCL, (const char*) &on, sizeof (on)) == -1)
     {
         perror("setsockopt");
         return (2);
     }
-     
-    //allow socket to send datagrams to broadcast addresses
-    if (setsockopt (sockfd, SOL_SOCKET, SO_BROADCAST, (const char*)&on, sizeof (on)) == -1)
-    {
-        perror("setsockopt");
-        return (3);
-    }  
-     
     return(0);
 }
 
-int read_file(char *buffer, FILE *file, int read_size)
-{
-    //char c;
-    //int size = 0;
-    //while( --read_size > 0 && ( c = getc(file)) != EOF ) {
-    //    *buffer++ = c;
-    //    size++;
-    //}
-    //return(size);
-    return(0);
-}
 
+// Function Send the file 
 int send_file(FILE *file, int max_buffer_size)
 {
-    char *buffer_hdr;
+    // Pointer to the address of the data in the memory 
+    char *Data; 
     int buffer_size = 0;
-    //Calculate total packet size
-    payload_size = max_buffer_size;
-    int packet_size = sizeof (struct iphdr) + sizeof (struct icmphdr) + payload_size;
+    // Calculate total packet size
+    Data_size = max_buffer_size;
+
+    // Size of the packet will be the sum of the (IPv4 Header Size + ICMP Header Size + Data size {1024 bytes}) 
+    int packet_size = sizeof (struct iphdr) + sizeof (struct icmphdr) + Data_size; 
+
+    // Allocate memory with the size of the packet 
+    // malloc function does memory allocation with the size provided and pointed to by the pointer *packet 
     char *packet = (char *) malloc (packet_size);
-                    
+
+    // if the packet pointer equals Null this means that no memory was allocated and no space for the packet and ends the code 
+    // Null = False 
     if (!packet)
     {
-        perror("out of memory");
+        perror("[*] Memory ba7");
         close(sockfd);
         return (1);
     }
-    //ip header
+
+    // Creates the IPv4 Header at the beginning of the allocated memory and point to it by a pointer 
     struct iphdr *ip = (struct iphdr *) packet;
+
+    // Creates the ICMP Header directly after the end of the IPv4 Header and point to it by a pointer 
     struct icmphdr *icmp = (struct icmphdr *) (packet + sizeof (struct iphdr));
-     
-    //zero out the packet buffer
+
+    // Zero all the fields in two headers 
     memset (packet, 0, packet_size);
- 
+
+    // Filling IPv4 header's field 
     ip->version = 4;
     ip->ihl = 5;
     ip->tos = 0;
     ip->tot_len = htons (packet_size);
-    ip->id = 0x1337;
+    ip->id = 0x3713;
     ip->frag_off = 0;
     ip->ttl = 255;
     ip->protocol = IPPROTO_ICMP;
     ip->saddr = saddr;
     ip->daddr = daddr;
-    //ip->check = in_cksum ((u16 *) ip, sizeof (struct iphdr));
- 
+
+    // Filling ICMP header's field 
     icmp->type = ICMP_ECHO;
     icmp->code = 0;
     icmp->un.echo.sequence = rand();
     icmp->un.echo.id = rand();
-    //checksum
+
     icmp->checksum = 0;
-     
+
+    // Address structs creation and zero all fields (equivalent to the function bzero)
     struct sockaddr_in servaddr;
     servaddr.sin_family = AF_INET;
     servaddr.sin_addr.s_addr = daddr;
     memset(&servaddr.sin_zero, 0, sizeof (servaddr.sin_zero));
-    
-    buffer_hdr = packet + sizeof(struct iphdr) + sizeof(struct icmphdr);
 
-    //while((buffer_size = read_file(buffer_hdr, file, max_buffer_size)) != 0) {
-    while((buffer_size = fread(buffer_hdr, 1, max_buffer_size, file)) != 0) {
-        icmp->checksum = 0;
-        icmp->checksum = in_cksum((unsigned short *)icmp, sizeof(struct icmphdr) + buffer_size);
+    // Points the Data pointer to the address where the data field is 
+    Data = packet + sizeof(struct iphdr) + sizeof(struct icmphdr);
+
+    // Keep reading from the file till the reading size is zero and fill it in the data field 
+    while((buffer_size = fread(Data, 1, max_buffer_size, file)) != 0) {
+
+    	// Calculates the checksum of the icmp header and fill it in the field 
+        icmp->checksum = checksum((unsigned short *)icmp, sizeof(struct icmphdr) + buffer_size);
+
+        // Calculates the size of the packet before send it 
         packet_size = sizeof (struct iphdr) + sizeof (struct icmphdr) + buffer_size;
-	printf("read %d ", buffer_size);
+        printf("read %d ", buffer_size);
+        
+        // Send the packet in the allocated memory through the raw socket 
         if ( (sent_size = sendto(sockfd, packet, packet_size, 0, (struct sockaddr*) &servaddr, sizeof (servaddr))) < 1)
         {
             perror("send failed\n");
-    	    return (2);
+            return (2);
         }
 
         ++sent;
         printf("%d packets sent\r", sent);
         fflush(stdout);
 
-        buffer_hdr = packet + sizeof(struct iphdr) + sizeof(struct icmphdr);
-	usleep(200);
+        // Reset the Data pointer to the beginning of the data field  
+        Data = packet + sizeof(struct iphdr) + sizeof(struct icmphdr);
+        
     }
-
-    //memset(packet + sizeof(struct iphdr) + sizeof(struct icmphdr), rand() % 255, payload_size);
-    //recalculate the icmp header checksum since we are filling the payload with random characters everytime
-    //icmp->checksum = 0;
-    //icmp->checksum = in_cksum((unsigned short *)icmp, sizeof(struct icmphdr) + payload_size);
-       
     return (0);
 }
- 
-int main(int argc, char **argv)
-{
-    int arg_options;
+
+int main(int argc, char **argv) {
+
     int quit = 0;
 
-    FILE *file;
 
-    const char *short_options = "s:f:m:h";
+    FILE *file; // Pointer of type file 
 
-    const struct option long_options[] = {
-        {"source-ip", required_argument, NULL, 's'},
-        {"file-name", required_argument, NULL, 'f'},
-        {"max-buffer-size", required_argument, NULL, 'm'},
-        {"help", no_argument, NULL, 'h'},
-        {NULL, 0, NULL, 0}
-    };
-
-    while ((arg_options =
-        getopt_long(argc, argv, short_options, long_options, NULL)) != -1) {
-
-        switch (arg_options) {
-
-        case 's':
-            saddr = inet_addr(optarg);
-            break;
-        case 'f':
-	    file= fopen(optarg, "r");
-            break;
-        case 'm':
-            max_buffer_size = atoi(optarg);
-            break;
-        case 'h':
-            usage(argv[0]);
+    // check arguments in case its less than the required ot it has "Help", prints Usage 
+    for (int i = 0; i < argc; i++) {
+        if (argv[i] == "help" || argc < 4 || argc == 1 ) {
+            usage();
             return 0;
-            break;
-        default:
-            printf("CMD line Options Error\n\n");
-            break;
         }
     }
 
-    /* target IP */
-    if (optind < argc) {
-        daddr = inet_addr(argv[optind]);
-    } else {
-        quit = 1;
-    }
+    // Convert address to network format 
+    saddr = inet_addr(argv[2]);
+    daddr = inet_addr(argv[1]);
 
-    if (quit ||(! file)) {
-        usage(argv[0]);
-        exit(0);
-    }
+    // Check if the file exists (accessible)
+    if (access(argv[3], F_OK) != -1) {
+        // if can be accessed then try to open it 
+        file = fopen(argv[3], "rb");
+        
+        // in case of failure, end the code 
+        if (!file) {
+            printf("[!] The FILE is 7ardan, not opening :(\n");
+            return 0;
+        }
 
+        printf("[*] File Found and Opened :D\n");
+    }
+    else{
+        printf("[!] Where is the FILE :| ?\n");
+        return 0;
+    }
+     
+
+    // Call the functions to start the functionality of the code 
     create_send_socket();
-
-    
+    	printf ("[*] Socket Created Successfully \n");
     send_file(file, max_buffer_size);
-
+		printf("[*] File Sent ... \n");
     free(packet);
+		printf ("[*] Memory Freed ... \n");
     close(sockfd);
-}
+		printf ("[*] Code Finished Exceution.\n");	
+    
+    return 0;
+   }
