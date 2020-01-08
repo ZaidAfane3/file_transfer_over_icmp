@@ -1,7 +1,7 @@
 /*
     Transfer file by ICMP
     By: liu feiran
-    Edited by Zaid Afaneh for University Project  
+    Edited by Zaid Afaneh for a university project  
 */
   
 
