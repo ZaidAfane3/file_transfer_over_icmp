@@ -27,6 +27,7 @@ so that the warnings are ignored.
 
 icmp_send.c (Sender side):
 =================================
+Sender Code:
 - The arguments that must be set when running this code are Destination IP, Source IP, and
 the file that we want to send. If the number of parameters are insufficient, the usage function is called 
 and prints out all the parameters that must be sent in order to run the code.
@@ -43,6 +44,7 @@ since we will be filling them.
 
 icmp_receive.c (Receiver side):
 ==============================================
+Reveiver Code: 
 - An empty file created an opened so that we can write the received data to it later.
 - A packet size is calculated (using ip header, icmp header, and data size of 2048), and then a packet is created and allocated memory using malloc.
 - A socket is created, and structures for the IP header and ICMP header are also created.
