@@ -1,12 +1,11 @@
 About 
 ======
 Implementation of file transfer over icmp, using the code written by @july5th.
-This code was submitted as a project for Network Programming Course (11437) in Princess Sumaya University For Technology first semester year 2019-2020. 
-
+This code was submitted as a project for Network Programming Course (11437) in Princess Sumaya University For Technology first semester year 2019-2020.
 IMPORTATN
 =================
 - Before installation a modification on unp.h must be done to sepcify the the OS Configuration file path.
-- Make Sure that these libraries are included in "unp.h" 
+- Make Sure that these libraries are included in "unp.h", the library used in Unix Network Programming: The Sockets Networking  API. W. R. Stevens, B. Fenner, A. M. Rudoff. Addison Wesley. 3rd Edition 2004.
     - #include <stdio.h>
     - #include <stdlib.h>
     - #include <string.h>
